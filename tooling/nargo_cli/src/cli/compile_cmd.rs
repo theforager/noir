@@ -259,7 +259,7 @@ fn compile_contract(
     (context.file_manager, Ok((optimized_contract, warnings)))
 }
 
-fn save_program(program: CompiledProgram, package: &Package, circuit_dir: &Path) {
+pub(super) fn save_program(program: CompiledProgram, package: &Package, circuit_dir: &Path) {
     let preprocessed_program = PreprocessedProgram {
         hash: program.hash,
         backend: String::from(BACKEND_IDENTIFIER),
