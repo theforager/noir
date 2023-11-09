@@ -1,7 +1,3 @@
-use acvm::acir::circuit::opcodes::BlackBoxFuncCall;
-use acvm::acir::circuit::Opcode;
-use acvm::Language;
-
 use nargo::artifacts::program::PreprocessedProgram;
 use nargo::package::Package;
 use nargo::prepare_package;
@@ -19,7 +15,6 @@ use crate::backends::Backend;
 use crate::errors::CliError;
 
 use super::check_cmd::check_crate_and_report_errors;
-use super::compile_cmd::save_program;
 
 use super::fs::program::save_program_to_file;
 use super::NargoConfig;
@@ -43,7 +38,7 @@ pub(crate) struct ExportCommand {
 }
 
 pub(crate) fn run(
-    backend: &Backend,
+    _backend: &Backend,
     args: ExportCommand,
     config: NargoConfig,
 ) -> Result<(), CliError> {
@@ -57,21 +52,11 @@ pub(crate) fn run(
         selection,
         Some(NOIR_ARTIFACT_VERSION_STRING.to_owned()),
     )?;
-    let circuit_dir = workspace.target_directory_path();
 
     let library_packages: Vec<_> =
         workspace.into_iter().filter(|package| package.is_library()).collect();
 
-    let (np_language, opcode_support) = backend.get_backend_info()?;
-    let is_opcode_supported = |opcode: &_| opcode_support.is_opcode_supported(opcode);
-
-    compile_program(
-        &workspace,
-        &library_packages[0],
-        &args.compile_options,
-        np_language,
-        &is_opcode_supported,
-    )?;
+    compile_program(&workspace, &library_packages[0], &args.compile_options)?;
 
     Ok(())
 }
@@ -80,8 +65,6 @@ fn compile_program(
     workspace: &Workspace,
     package: &Package,
     compile_options: &CompileOptions,
-    np_language: Language,
-    is_opcode_supported: &impl Fn(&Opcode) -> bool,
 ) -> Result<(), CliError> {
     let (mut context, crate_id) =
         prepare_package(package, Box::new(|path| std::fs::read_to_string(path)));
@@ -94,30 +77,13 @@ fn compile_program(
 
     let exported_functions = context.get_all_exported_functions_in_crate(&crate_id);
 
-    // TODO: we say that pedersen hashing is supported by all backends for now
-    let is_opcode_supported_pedersen_hash = |opcode: &Opcode| -> bool {
-        if let Opcode::BlackBoxFuncCall(BlackBoxFuncCall::PedersenHash { .. }) = opcode {
-            true
-        } else {
-            is_opcode_supported(opcode)
-        }
-    };
-
     let exported_programs: Vec<_> = exported_functions
         .into_iter()
         .map(|(function_name, function_id)| -> (String, CompiledProgram) {
             let program = compile_no_check(&context, compile_options, function_id, None, false)
                 .expect("heyooo");
 
-            // Apply backend specific optimizations.
-            let optimized_program = nargo::ops::optimize_program(
-                program,
-                np_language,
-                &is_opcode_supported_pedersen_hash,
-            )
-            .expect("Backend does not support an opcode that is in the IR");
-
-            (function_name, optimized_program)
+            (function_name, program)
         })
         .collect();
 
