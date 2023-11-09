@@ -1,3 +1,4 @@
+use iter_extended::vecmap;
 use nargo::artifacts::program::PreprocessedProgram;
 use nargo::package::Package;
 use nargo::prepare_package;
@@ -77,15 +78,13 @@ fn compile_program(
 
     let exported_functions = context.get_all_exported_functions_in_crate(&crate_id);
 
-    let exported_programs: Vec<_> = exported_functions
-        .into_iter()
-        .map(|(function_name, function_id)| -> (String, CompiledProgram) {
+    let exported_programs =
+        vecmap(exported_functions, |(function_name, function_id)| -> (String, CompiledProgram) {
             let program = compile_no_check(&context, compile_options, function_id, None, false)
                 .expect("heyooo");
 
             (function_name, program)
-        })
-        .collect();
+        });
 
     for (function_name, program) in exported_programs {
         let preprocessed_program = PreprocessedProgram {
